@@ -7,8 +7,18 @@ import (
 
 func main() {
 
-	task := Utils.NewReduceTask(Utils.TypeReduce1, "mere", []int{1, 1, 1, 1, 1, 1, 0, 0})
+	task := Utils.NewMapTask(Utils.TypeMap1, "sd")
 
-	fmt.Println(task.Complete())
+	buffer := task.Serialize()
+
+	fmt.Println(buffer)
+
+	var task1 Utils.ReduceTask
+
+	err := task1.Deserialize(buffer)
+	Utils.Panic(err)
+	fmt.Println(task1)
+
+	fmt.Println(task1.Complete())
 
 }
