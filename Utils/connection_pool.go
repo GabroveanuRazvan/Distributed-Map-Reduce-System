@@ -14,6 +14,8 @@ type ConnectionPool struct {
 	server           net.Listener
 	connections      []net.Conn
 	connectionsMutex sync.RWMutex
+	haltingMutex     sync.Mutex
+	haltingCond      *sync.Cond
 	roundRobinIndex  int
 }
 
@@ -30,8 +32,12 @@ func NewConnectionPool(serverAddress string) (*ConnectionPool, error) {
 		server:           listener,
 		connections:      make([]net.Conn, 0),
 		connectionsMutex: sync.RWMutex{},
+		haltingMutex:     sync.Mutex{},
+		haltingCond:      nil,
 		roundRobinIndex:  0,
 	}
+
+	pool.haltingCond = sync.NewCond(&pool.haltingMutex)
 
 	return pool, nil
 }
@@ -43,6 +49,9 @@ func (connectionPool *ConnectionPool) addConnection(newConnection net.Conn) {
 	defer connectionPool.connectionsMutex.Unlock()
 
 	connectionPool.connections = append(connectionPool.connections, newConnection)
+
+	// Signal the receiver and sender threads that there are open connections
+	connectionPool.haltingCond.Broadcast()
 
 }
 
@@ -87,6 +96,7 @@ func (connectionPool *ConnectionPool) incrementRoundRobinIndex() {
 }
 
 // SendTask sends a task through a connection in a round-robin manner.
+// Halts if there are no available connections to send the task.
 func (connectionPool *ConnectionPool) SendTask(task Task) {
 
 	// Build the message buffer by creating a buffer formed from the bytes of the encoding length and the encoding itself
@@ -99,6 +109,9 @@ func (connectionPool *ConnectionPool) SendTask(task Task) {
 
 	messageBuffer.Write(lengthBuffer)
 	messageBuffer.Write(encodingBuffer.Bytes())
+
+	// Halt if there are no connections
+	connectionPool.haltThread()
 
 	// Send the message through a connection
 	connectionPool.connectionsMutex.RLock()
@@ -114,13 +127,15 @@ func (connectionPool *ConnectionPool) SendTask(task Task) {
 
 func (connectionPool *ConnectionPool) StartReceiveResultsThread() {
 
-	receiveIndex := 0
-
 	go func() {
+
+		receiveIndex := 0
+
 		for {
+			// Halt if there are no connections
+			connectionPool.haltThread()
 
 			connectionPool.connectionsMutex.RLock()
-
 			currentConn := connectionPool.connections[receiveIndex]
 			receiveIndex = (receiveIndex + 1) % connectionPool.NumConnections()
 
@@ -157,4 +172,14 @@ func (connectionPool *ConnectionPool) StartReceiveResultsThread() {
 		}
 	}()
 
+}
+
+// / haltThread Halts the current thread until there are available conenctions
+func (connectionPool *ConnectionPool) haltThread() {
+	// Halt the thread if there are no connections
+	connectionPool.haltingMutex.Lock()
+	if connectionPool.NumConnections() == 0 {
+		connectionPool.haltingCond.Wait()
+	}
+	connectionPool.haltingMutex.Unlock()
 }
