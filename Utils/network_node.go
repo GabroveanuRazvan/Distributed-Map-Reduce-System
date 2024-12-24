@@ -31,8 +31,8 @@ func (node *NetworkNode) Start(numWorkers uint32) {
 	for {
 		task := node.ReceiveTask()
 		threadPool.Go(func() {
-			s, res := task.Complete()
-			fmt.Println(s, res)
+			result := task.Complete()
+			fmt.Println(result)
 		})
 	}
 

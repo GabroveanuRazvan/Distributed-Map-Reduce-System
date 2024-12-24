@@ -2,28 +2,22 @@ package main
 
 import (
 	"Distributed-Map-Reduce-System/Utils"
-	"time"
+	"fmt"
 )
 
 func main() {
 
-	pool, err := Utils.NewConnectionPool("0.0.0.0:7878")
-	Utils.Panic(err)
-	pool.StartListenThread()
+	res := Utils.NewTaskResult("mwre", 3, Utils.MapTaskId, 3)
 
-	node := Utils.NewNetworkNode("127.0.0.1:7878")
-	go func() {
-		node.Start(2)
-	}()
+	fmt.Println(res)
+	buffer := res.Serialize()
 
-	time.Sleep(1 * time.Second)
-	task1 := Utils.NewMapTask(Utils.TypeMap1, "sdfsdf", 7)
-	pool.SendTask(&task1)
+	fmt.Println(buffer)
 
-	task2 := Utils.NewReduceTask(Utils.TypeReduce1, "sdfdsfds", []int{1, 1, 1}, 9)
+	var newRes Utils.TaskResult
 
-	pool.SendTask(&task2)
+	newRes.Deserialize(buffer)
 
-	time.Sleep(2 * time.Second)
+	fmt.Println(newRes)
 
 }

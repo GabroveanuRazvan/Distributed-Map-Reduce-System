@@ -110,14 +110,14 @@ func (connectionPool *ConnectionPool) SendTask(task Task) {
 
 }
 
-func (connectionPool *ConnectionPool) ReceiveResultsThread() Task {
-
-	receiveIndex := 0
-
-	for {
-
-		currentConn := connectionPool.connections[connectionPool.roundRobinIndex]
-
-	}
-
-}
+//func (connectionPool *ConnectionPool) ReceiveResultsThread() Task {
+//
+//	receiveIndex := 0
+//
+//	for {
+//
+//		currentConn := connectionPool.connections[connectionPool.roundRobinIndex]
+//
+//	}
+//
+//}

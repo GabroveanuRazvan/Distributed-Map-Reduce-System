@@ -50,8 +50,10 @@ func NewMapTask(mapId MapFunctionId, stringToProcess string, ppid int) MapTask {
 }
 
 // Complete on a MapTask applies the corresponding function on the given string.
-func (task *MapTask) Complete() (string, int) {
-	return task.StringToProcess, BoolToInt(MapFunctionRegistry[task.MapId](task.StringToProcess))
+func (task *MapTask) Complete() TaskResult {
+	result := BoolToInt(MapFunctionRegistry[task.MapId](task.StringToProcess))
+
+	return NewTaskResult(task.StringToProcess, result, MapTaskId, task.Ppid)
 }
 
 // Serialize serializes the current object and returns it's buffer.
@@ -170,6 +172,7 @@ func DeserializeTask(buffer *bytes.Buffer) (Task, error) {
 	return &newTask, nil
 }
 
+// TaskResult represents the data returned by a Task.
 type TaskResult struct {
 	ProcessedString string
 	Result          int
@@ -177,6 +180,26 @@ type TaskResult struct {
 	Ppid            int
 }
 
+// NewTaskResult initializes a new TaskResult.
 func NewTaskResult(processedString string, result int, taskId TaskId, ppi int) TaskResult {
 	return TaskResult{processedString, result, taskId, ppi}
+}
+
+// Serialize serializes the current TaskResult and returns its bytes buffer.
+func (taskResult *TaskResult) Serialize() *bytes.Buffer {
+	buffer := bytes.NewBuffer([]byte{})
+	encoder := gob.NewEncoder(buffer)
+	err := encoder.Encode(taskResult)
+	Panic(err)
+
+	return buffer
+}
+
+// Deserialize deserializes the given bytes buffer into the current object.
+func (taskResult *TaskResult) Deserialize(buffer *bytes.Buffer) {
+
+	decoder := gob.NewDecoder(buffer)
+	err := decoder.Decode(taskResult)
+	Panic(err)
+
 }
