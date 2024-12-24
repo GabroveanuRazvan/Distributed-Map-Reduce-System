@@ -1,5 +1,7 @@
 package Utils
 
+import "net"
+
 // BoolToInt converts a bool to an integer.
 func BoolToInt(predicate bool) int {
 	if predicate {
@@ -37,4 +39,9 @@ func Panic(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func ReadTimeoutError(err error) bool {
+	netErr, ok := err.(net.Error)
+	return ok && netErr.Timeout()
 }

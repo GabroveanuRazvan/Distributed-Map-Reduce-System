@@ -17,6 +17,7 @@ func main() {
 	}()
 
 	time.Sleep(1 * time.Second)
+	pool.StartReceiveResultsThread()
 	task1 := Utils.NewMapTask(Utils.TypeMap1, "sdfsdf", 7)
 	pool.SendTask(&task1)
 
@@ -24,6 +25,6 @@ func main() {
 
 	pool.SendTask(&task2)
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
 
 }

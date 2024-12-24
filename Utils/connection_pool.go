@@ -3,8 +3,10 @@ package Utils
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"sync"
+	"time"
 )
 
 // ConnectionPool is a structure that manages many node connections.
@@ -110,14 +112,49 @@ func (connectionPool *ConnectionPool) SendTask(task Task) {
 
 }
 
-//func (connectionPool *ConnectionPool) ReceiveResultsThread() Task {
-//
-//	receiveIndex := 0
-//
-//	for {
-//
-//		currentConn := connectionPool.connections[connectionPool.roundRobinIndex]
-//
-//	}
-//
-//}
+func (connectionPool *ConnectionPool) StartReceiveResultsThread() {
+
+	receiveIndex := 0
+
+	go func() {
+		for {
+
+			connectionPool.connectionsMutex.RLock()
+
+			currentConn := connectionPool.connections[receiveIndex]
+			receiveIndex = (receiveIndex + 1) % connectionPool.NumConnections()
+
+			readDeadline := time.Now().Add(200 * time.Millisecond)
+			err := currentConn.SetReadDeadline(readDeadline)
+			Panic(err)
+
+			// Read the encoding length
+			encodingLengthBytes := make([]byte, 4)
+			_, err = currentConn.Read(encodingLengthBytes)
+
+			// If the read timed out just continue to the next connection
+			if ReadTimeoutError(err) {
+				continue
+			} else {
+				Panic(err)
+			}
+
+			encodingLength := binary.BigEndian.Uint32(encodingLengthBytes)
+
+			// Read the encoding bytes using the encoding length
+			encodingBytes := make([]byte, encodingLength)
+			_, err = currentConn.Read(encodingBytes)
+			Panic(err)
+
+			// Deserialize the task result
+			var taskRes TaskResult
+			encodingBuffer := bytes.NewBuffer(encodingBytes)
+			taskRes.Deserialize(encodingBuffer)
+
+			fmt.Println("Task res", taskRes)
+
+			connectionPool.connectionsMutex.RUnlock()
+		}
+	}()
+
+}

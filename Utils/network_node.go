@@ -3,7 +3,6 @@ package Utils
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"net"
 )
 
@@ -20,6 +19,8 @@ func NewNetworkNode(peerAddress string) NetworkNode {
 	}
 }
 
+// Start attempts to connect to the peer and creates a new ThreadPool.
+// In a loop receive tasks and send them in a thread pool to be completed and sent back to the peer.
 func (node *NetworkNode) Start(numWorkers uint32) {
 	connection, err := net.Dial("tcp", node.peerAddress)
 	Panic(err)
@@ -31,8 +32,22 @@ func (node *NetworkNode) Start(numWorkers uint32) {
 	for {
 		task := node.ReceiveTask()
 		threadPool.Go(func() {
+			// Complete the task and get its result
 			result := task.Complete()
-			fmt.Println(result)
+
+			// Serialize the task and build the message buffer by concatenating the length and the serialized result into a single buffer
+			resultBuffer := result.Serialize()
+			resultLen := resultBuffer.Len()
+
+			lenBuffer := make([]byte, 4)
+			binary.BigEndian.PutUint32(lenBuffer, uint32(resultLen))
+
+			messageBuffer := bytes.NewBuffer(nil)
+			messageBuffer.Write(lenBuffer)
+			messageBuffer.Write(resultBuffer.Bytes())
+
+			_, err := node.connection.Write(messageBuffer.Bytes())
+			Panic(err)
 		})
 	}
 
