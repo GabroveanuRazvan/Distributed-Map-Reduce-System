@@ -1,33 +1,19 @@
 package main
 
-import (
-	"Distributed-Map-Reduce-System/Utils"
-	"time"
-)
+import "Distributed-Map-Reduce-System/Utils"
 
 func main() {
 
-	pool, err := Utils.NewConnectionPool("0.0.0.0:7878")
+	masterNode, err := Utils.NewConnectionPool("0.0.0.0:7878")
+	masterNode.Start()
 	Utils.Panic(err)
-	pool.StartListenThread()
-	pool.StartReceiveResultsThread()
 
-	node := Utils.NewNetworkNode("127.0.0.1:7878")
+	input := [][]string{
+		{"aabbb", "ebep", "blablablaa", "hijk", "wsww"},
+		{"abba", "eeeppp", "cocor", "ppppppaa", "qwerty", "acasq"},
+		{"lalala", "lalal", "papapa", "papap"}}
 
-	go func() {
-		time.Sleep(5 * time.Second)
-		node.Start(2)
-	}()
+	masterNode.RegisterProblem(input, Utils.TypeMap1)
 
-	time.Sleep(1 * time.Second)
-
-	task1 := Utils.NewMapTask(Utils.TypeMap1, "sdfsdf", 7)
-	pool.SendTask(&task1)
-
-	task2 := Utils.NewReduceTask(Utils.TypeReduce1, "sdfdsfds", []int{1, 1, 1}, 9)
-
-	pool.SendTask(&task2)
-
-	time.Sleep(5 * time.Second)
-
+	select {}
 }

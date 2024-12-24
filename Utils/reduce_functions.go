@@ -10,6 +10,15 @@ const (
 	TypeReduceRightBound
 )
 
+// isValidReduceType checks if the given map id is valid.
+func isValidReduceType(t ReduceFunctionId) bool {
+
+	if TypeReduceLeftBound >= t || t >= TypeReduceRightBound {
+		return false
+	}
+	return true
+}
+
 // ReduceFunctionRegistry maps each reduce function id to the specific function.
 var ReduceFunctionRegistry = map[ReduceFunctionId]func([]int) int{
 

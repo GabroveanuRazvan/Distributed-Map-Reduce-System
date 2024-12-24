@@ -3,6 +3,7 @@ package Utils
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -17,6 +18,11 @@ type ConnectionPool struct {
 	haltingMutex     sync.Mutex
 	haltingCond      *sync.Cond
 	roundRobinIndex  int
+
+	// Maps each id of each problem to the number of tasks that need to be processed
+	problemTasks map[int]int
+	mapMutex     sync.RWMutex
+	ppidCounter  int
 }
 
 // NewConnectionPool initializes the pool by creating a listener on the given address.
@@ -35,6 +41,10 @@ func NewConnectionPool(serverAddress string) (*ConnectionPool, error) {
 		haltingMutex:     sync.Mutex{},
 		haltingCond:      nil,
 		roundRobinIndex:  0,
+
+		problemTasks: make(map[int]int),
+		mapMutex:     sync.RWMutex{},
+		ppidCounter:  0,
 	}
 
 	pool.haltingCond = sync.NewCond(&pool.haltingMutex)
@@ -42,21 +52,28 @@ func NewConnectionPool(serverAddress string) (*ConnectionPool, error) {
 	return pool, nil
 }
 
+// Start starts the connection pool and creates the threads that compose the architecture of the system.
+func (connectionPool *ConnectionPool) Start() {
+
+	resultsChannel := make(chan TaskResult)
+	connectionPool.listenThread()
+	connectionPool.receiveResultsThread(resultsChannel)
+	connectionPool.resultProcessorThread(resultsChannel)
+}
+
 // addConnection locks the connection vector in order to append to it a new connection.
 func (connectionPool *ConnectionPool) addConnection(newConnection net.Conn) {
 
 	connectionPool.connectionsMutex.Lock()
 	defer connectionPool.connectionsMutex.Unlock()
-
 	connectionPool.connections = append(connectionPool.connections, newConnection)
 
 	// Signal the receiver and sender threads that there are open connections
 	connectionPool.haltingCond.Broadcast()
-
 }
 
-// StartListenThread starts a thread that listens for new connections and adds them to the connection vector.
-func (connectionPool *ConnectionPool) StartListenThread() {
+// listenThread starts a thread that listens for new connections and adds them to the connection vector.
+func (connectionPool *ConnectionPool) listenThread() {
 
 	go func() {
 
@@ -95,9 +112,39 @@ func (connectionPool *ConnectionPool) incrementRoundRobinIndex() {
 
 }
 
-// SendTask sends a task through a connection in a round-robin manner.
+func (connectionPool *ConnectionPool) RegisterProblem(words [][]string, mapId MapFunctionId) {
+
+	if !isValidMapType(mapId) {
+		Panic(errors.New("map id invalid"))
+	}
+
+	if !IsValidMatrix(words) {
+		Panic(errors.New("invalid problem to solve"))
+	}
+
+	// Compute the number of tasks to scatter across the node cluster
+	numTasks := len(words) * len(words[0])
+
+	// Allocate a new ppid and map it to the number of tasks
+	connectionPool.mapMutex.Lock()
+	connectionPool.problemTasks[connectionPool.ppidCounter] = numTasks
+	currentPpid := connectionPool.ppidCounter
+	connectionPool.ppidCounter++
+	connectionPool.mapMutex.Unlock()
+
+	// For each string, wrap it into a task and send it to be processed
+	for _, subVector := range words {
+		for _, word := range subVector {
+			mapTask := NewMapTask(mapId, word, currentPpid)
+			connectionPool.sendTask(&mapTask)
+		}
+	}
+
+}
+
+// sendTask sends a task through a connection in a round-robin manner.
 // Halts if there are no available connections to send the task.
-func (connectionPool *ConnectionPool) SendTask(task Task) {
+func (connectionPool *ConnectionPool) sendTask(task Task) {
 
 	// Build the message buffer by creating a buffer formed from the bytes of the encoding length and the encoding itself
 	messageBuffer := bytes.NewBuffer(nil)
@@ -115,17 +162,19 @@ func (connectionPool *ConnectionPool) SendTask(task Task) {
 
 	// Send the message through a connection
 	connectionPool.connectionsMutex.RLock()
-	defer connectionPool.connectionsMutex.RUnlock()
-
 	currentConnection := connectionPool.connections[connectionPool.roundRobinIndex]
 	_, err := currentConnection.Write(messageBuffer.Bytes())
 
+	// Unlock the mutex so that there will be no 2 Read Locks on the same thread
+	connectionPool.connectionsMutex.RUnlock()
+
 	connectionPool.incrementRoundRobinIndex()
 	Panic(err)
-
 }
 
-func (connectionPool *ConnectionPool) StartReceiveResultsThread() {
+// receiveResultsThread receives data from each connection and decodes them into TaskResults.
+// Through a channel forwards them to the resultProcessorThread.
+func (connectionPool *ConnectionPool) receiveResultsThread(resultTx chan<- TaskResult) {
 
 	go func() {
 
@@ -137,7 +186,6 @@ func (connectionPool *ConnectionPool) StartReceiveResultsThread() {
 
 			connectionPool.connectionsMutex.RLock()
 			currentConn := connectionPool.connections[receiveIndex]
-			receiveIndex = (receiveIndex + 1) % connectionPool.NumConnections()
 
 			readDeadline := time.Now().Add(200 * time.Millisecond)
 			err := currentConn.SetReadDeadline(readDeadline)
@@ -149,6 +197,12 @@ func (connectionPool *ConnectionPool) StartReceiveResultsThread() {
 
 			// If the read timed out just continue to the next connection
 			if ReadTimeoutError(err) {
+
+				// Unlock the current lock so that there will be no 2 Read locks
+				connectionPool.connectionsMutex.RUnlock()
+				// Update the receive index
+				receiveIndex = (receiveIndex + 1) % connectionPool.NumConnections()
+
 				continue
 			} else {
 				Panic(err)
@@ -161,15 +215,28 @@ func (connectionPool *ConnectionPool) StartReceiveResultsThread() {
 			_, err = currentConn.Read(encodingBytes)
 			Panic(err)
 
+			connectionPool.connectionsMutex.RUnlock()
+
 			// Deserialize the task result
 			var taskRes TaskResult
 			encodingBuffer := bytes.NewBuffer(encodingBytes)
 			taskRes.Deserialize(encodingBuffer)
 
-			fmt.Println("Task res", taskRes)
+			resultTx <- taskRes
 
-			connectionPool.connectionsMutex.RUnlock()
 		}
+	}()
+
+}
+
+func (connectionPool *ConnectionPool) resultProcessorThread(resultRx <-chan TaskResult) {
+
+	go func() {
+
+		for result := range resultRx {
+			fmt.Println(result)
+		}
+
 	}()
 
 }

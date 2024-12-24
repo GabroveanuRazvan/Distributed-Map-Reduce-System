@@ -41,7 +41,22 @@ func Panic(err error) {
 	}
 }
 
+// ReadTimeoutError checks if an error is a timeout one and checks if it really did time out.
 func ReadTimeoutError(err error) bool {
 	netErr, ok := err.(net.Error)
 	return ok && netErr.Timeout()
+}
+
+// IsValidMatrix checks weather a matrix contains elements
+func IsValidMatrix[T any](matrix [][]T) bool {
+
+	if len(matrix) == 0 {
+		return false
+	}
+
+	if len(matrix[0]) == 0 {
+		return false
+	}
+
+	return true
 }

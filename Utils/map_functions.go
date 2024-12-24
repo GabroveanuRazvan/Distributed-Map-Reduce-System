@@ -12,6 +12,15 @@ const (
 	TypeMapRightBound
 )
 
+// isValidMapType checks if the given map id is valid.
+func isValidMapType(t MapFunctionId) bool {
+
+	if TypeMapLeftBound >= t || t >= TypeMapRightBound {
+		return false
+	}
+	return true
+}
+
 // MapFunctionRegistry maps each map function id to the specific function.
 var MapFunctionRegistry = map[MapFunctionId]func(string) bool{
 
