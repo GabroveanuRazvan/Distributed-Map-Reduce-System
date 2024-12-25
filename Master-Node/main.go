@@ -11,14 +11,14 @@ func main() {
 	masterNode.Start()
 	Utils.Panic(err)
 
-	//input1 := [][]string{
-	//	{"aabbb", "ebep", "blablablaa", "hijk", "wsww"},
-	//	{"abba", "eeeppp", "cocor", "ppppppaa", "qwerty"},
-	//	{"lalala", "lalal", "papapa", "aabbb", "acasq"}}
-	//
-	//go func() {
-	//	fmt.Println(masterNode.RegisterProblem(input1, Utils.TypeMap1))
-	//}()
+	input1 := [][]string{
+		{"aabbb", "ebep", "blablablaa", "hijk", "wsww"},
+		{"abba", "eeeppp", "cocor", "ppppppaa", "qwerty"},
+		{"lalala", "lalal", "papapa", "aabbb", "acasq"}}
+
+	go func() {
+		fmt.Println(masterNode.RegisterProblem(input1, Utils.TypeMap1))
+	}()
 
 	input2 := [][]string{
 		{"a1551a", "parc", "ana", "minim2", "1pcl3"},

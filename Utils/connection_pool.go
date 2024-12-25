@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -16,11 +17,11 @@ type ConnectionPool struct {
 	connectionsMutex sync.RWMutex
 	haltingMutex     sync.Mutex
 	haltingCond      *sync.Cond
-	roundRobinIndex  int
+	roundRobinIndex  int64
 
 	// Maps each id of each problem to the number of tasks that need to be processed
 	problemTasks sync.Map
-	ppidCounter  int
+	ppidCounter  int64
 
 	// All problems are mapped to a channel that will return the result
 	reduceResultPipes sync.Map
@@ -44,7 +45,7 @@ func NewConnectionPool(serverAddress string) (*ConnectionPool, error) {
 		roundRobinIndex:  0,
 
 		problemTasks: sync.Map{},
-		ppidCounter:  0,
+		ppidCounter:  1,
 
 		reduceResultPipes: sync.Map{},
 	}
@@ -108,9 +109,16 @@ func (connectionPool *ConnectionPool) NumConnections() int {
 // incrementRoundRobinIndex increments the index in a round-robin manner.
 func (connectionPool *ConnectionPool) incrementRoundRobinIndex() {
 
-	numConnections := connectionPool.NumConnections()
+	for {
+		numConnections := int64(connectionPool.NumConnections())
+		currentIndex := atomic.LoadInt64(&connectionPool.roundRobinIndex)
 
-	connectionPool.roundRobinIndex = (connectionPool.roundRobinIndex + 1) % numConnections
+		newIndex := (currentIndex + 1) % numConnections
+
+		if atomic.CompareAndSwapInt64(&connectionPool.roundRobinIndex, currentIndex, newIndex) {
+			break
+		}
+	}
 
 }
 
@@ -134,9 +142,8 @@ func (connectionPool *ConnectionPool) RegisterProblem(words [][]string, mapId Ma
 	}
 
 	// Allocate a new ppid and map it to the number of tasks
-	connectionPool.problemTasks.Store(connectionPool.ppidCounter, numTasks)
-	currentPpid := connectionPool.ppidCounter
-	connectionPool.ppidCounter++
+	currentPpid := atomic.AddInt64(&connectionPool.ppidCounter, 1) - 1
+	connectionPool.problemTasks.Store(currentPpid, numTasks)
 
 	// Create the channel that will be used to retrieve the result
 	resultChan := make(chan int, 1)
@@ -253,11 +260,11 @@ func (connectionPool *ConnectionPool) resultProcessorThread(resultRx <-chan Task
 	go func() {
 
 		// Make a map of ppids that stores maps of strings of arrays of results
-		mapResults := make(map[int]map[string][]int)
+		mapResults := make(map[int64]map[string][]int)
 		// A map of ppids to reduced results for each problem
-		reduceResults := make(map[int]int)
+		reduceResults := make(map[int64]int)
 		// Store for each ppid the number of received tasks
-		taskCounter := make(map[int]int)
+		taskCounter := make(map[int64]int)
 
 		// Process each incoming task
 		for taskResult := range resultRx {
@@ -303,7 +310,7 @@ func (connectionPool *ConnectionPool) resultProcessorThread(resultRx <-chan Task
 					// Get the corresponding channel of this task and send the result
 					val, _ := connectionPool.reduceResultPipes.Load(ppid)
 					resultChan, _ := val.(chan int)
-					println('a')
+
 					resultChan <- reduceResults[ppid]
 
 					// Delete the entries in each map as they are no longer needed
@@ -322,7 +329,7 @@ func (connectionPool *ConnectionPool) resultProcessorThread(resultRx <-chan Task
 
 // sendReduceTasks takes a bunch of strings and their map values and wraps them into ReduceTask to be sent back to the cluster of worker nodes.
 // Return the number of reduce tasks sent.
-func (connectionPool *ConnectionPool) sendReduceTasks(ppid int, mapResults map[string][]int, reduceId ReduceFunctionId) int {
+func (connectionPool *ConnectionPool) sendReduceTasks(ppid int64, mapResults map[string][]int, reduceId ReduceFunctionId) int {
 
 	numTasks := 0
 	// For each entry in the map build a ReduceTask

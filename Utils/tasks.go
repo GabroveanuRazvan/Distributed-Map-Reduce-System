@@ -37,11 +37,11 @@ func NewTaskDeserializationError(message string) TaskDeserializationError {
 type MapTask struct {
 	MapId           MapFunctionId
 	StringToProcess string
-	Ppid            int
+	Ppid            int64
 }
 
 // NewMapTask initializes a new map task.
-func NewMapTask(mapId MapFunctionId, stringToProcess string, ppid int) MapTask {
+func NewMapTask(mapId MapFunctionId, stringToProcess string, ppid int64) MapTask {
 	return MapTask{
 		MapId:           mapId,
 		StringToProcess: stringToProcess,
@@ -84,6 +84,7 @@ func (task *MapTask) Deserialize(buffer *bytes.Buffer) error {
 
 	task.StringToProcess = newTask.StringToProcess
 	task.MapId = newTask.MapId
+	task.Ppid = newTask.Ppid
 
 	return nil
 }
@@ -93,11 +94,11 @@ type ReduceTask struct {
 	ReduceId        ReduceFunctionId
 	StringToProcess string
 	Predicates      []int
-	Ppid            int
+	Ppid            int64
 }
 
 // NewReduceTask initializes a new reduce task.
-func NewReduceTask(reduceId ReduceFunctionId, stringToProcess string, predicates []int, ppid int) ReduceTask {
+func NewReduceTask(reduceId ReduceFunctionId, stringToProcess string, predicates []int, ppid int64) ReduceTask {
 	return ReduceTask{
 		ReduceId:        reduceId,
 		StringToProcess: stringToProcess,
@@ -146,10 +147,13 @@ func (task *ReduceTask) Deserialize(buffer *bytes.Buffer) error {
 	task.StringToProcess = newTask.StringToProcess
 	task.ReduceId = newTask.ReduceId
 	task.Predicates = newTask.Predicates
+	task.Ppid = newTask.Ppid
 
 	return nil
 }
 
+// DeserializeTask is a method to deserialize a Task by checking each method on each instance of each type of task.
+// It works around GOB's limitations.
 func DeserializeTask(buffer *bytes.Buffer) (Task, error) {
 	bufferCopy := bytes.NewBuffer(nil)
 	bufferCopy.Write(buffer.Bytes())
@@ -177,11 +181,11 @@ type TaskResult struct {
 	ProcessedString string
 	Result          int
 	TaskID          TaskId
-	Ppid            int
+	Ppid            int64
 }
 
 // NewTaskResult initializes a new TaskResult.
-func NewTaskResult(processedString string, result int, taskId TaskId, ppid int) TaskResult {
+func NewTaskResult(processedString string, result int, taskId TaskId, ppid int64) TaskResult {
 	return TaskResult{processedString, result, taskId, ppid}
 }
 
