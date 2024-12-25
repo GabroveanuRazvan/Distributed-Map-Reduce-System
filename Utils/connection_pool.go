@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -23,8 +22,8 @@ type ConnectionPool struct {
 	problemTasks sync.Map
 	ppidCounter  int
 
-	// This channel will be used to send the result of a set of reduce tasks
-	reduceResultChan chan int
+	// All problems are mapped to a channel that will return the result
+	reduceResultPipes sync.Map
 }
 
 // NewConnectionPool initializes the pool by creating a listener on the given address.
@@ -47,7 +46,7 @@ func NewConnectionPool(serverAddress string) (*ConnectionPool, error) {
 		problemTasks: sync.Map{},
 		ppidCounter:  0,
 
-		reduceResultChan: make(chan int, 1),
+		reduceResultPipes: sync.Map{},
 	}
 
 	pool.haltingCond = sync.NewCond(&pool.haltingMutex)
@@ -115,6 +114,8 @@ func (connectionPool *ConnectionPool) incrementRoundRobinIndex() {
 
 }
 
+// RegisterProblem takes a matrix of strings and a type of mapping and sends tasks to the system in order to be solved.
+// This function will block the current thread until the result of the problem is computed.
 func (connectionPool *ConnectionPool) RegisterProblem(words [][]string, mapId MapFunctionId) float64 {
 
 	if !isValidMapType(mapId) {
@@ -137,6 +138,10 @@ func (connectionPool *ConnectionPool) RegisterProblem(words [][]string, mapId Ma
 	currentPpid := connectionPool.ppidCounter
 	connectionPool.ppidCounter++
 
+	// Create the channel that will be used to retrieve the result
+	resultChan := make(chan int, 1)
+	connectionPool.reduceResultPipes.Store(currentPpid, resultChan)
+
 	// For each string, wrap it into a task and send it to be processed
 	for _, subVector := range words {
 		for _, word := range subVector {
@@ -146,8 +151,9 @@ func (connectionPool *ConnectionPool) RegisterProblem(words [][]string, mapId Ma
 	}
 
 	// Wait to get the result
-	numValidWords := <-connectionPool.reduceResultChan
+	numValidWords := <-resultChan
 
+	connectionPool.reduceResultPipes.Delete(currentPpid)
 	return float64(numValidWords) / float64(numArrays)
 
 }
@@ -240,6 +246,8 @@ func (connectionPool *ConnectionPool) receiveResultsThread(resultTx chan<- TaskR
 
 }
 
+// resultProcessorThread gathers the completed tasks from the nodes and computes the results.
+// If the results come from map tasks, computes the reduce tasks and sends them to the node cluster.
 func (connectionPool *ConnectionPool) resultProcessorThread(resultRx <-chan TaskResult) {
 
 	go func() {
@@ -291,8 +299,12 @@ func (connectionPool *ConnectionPool) resultProcessorThread(resultRx <-chan Task
 
 				// If the current set of tasks has been processed,
 				if numInitialTasks == numCurrentTasks {
-					fmt.Println(reduceResults[ppid])
-					connectionPool.reduceResultChan <- reduceResults[ppid]
+
+					// Get the corresponding channel of this task and send the result
+					val, _ := connectionPool.reduceResultPipes.Load(ppid)
+					resultChan, _ := val.(chan int)
+					println('a')
+					resultChan <- reduceResults[ppid]
 
 					// Delete the entries in each map as they are no longer needed
 					delete(reduceResults, ppid)

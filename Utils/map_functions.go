@@ -9,6 +9,8 @@ type MapFunctionId int
 const (
 	TypeMapLeftBound MapFunctionId = iota
 	TypeMap1
+	TypeMap2
+	TypeMap3
 	TypeMapRightBound
 )
 
@@ -25,6 +27,8 @@ func isValidMapType(t MapFunctionId) bool {
 var MapFunctionRegistry = map[MapFunctionId]func(string) bool{
 
 	TypeMap1: map1,
+	TypeMap2: map2,
+	TypeMap3: map3,
 }
 
 // map1 returns true if the current string has an even number of vowels and the number of consonants can be divided by 3.
@@ -49,4 +53,42 @@ func map1(s string) bool {
 
 	return numVowels%2 == 0 && numConsonants%3 == 0
 
+}
+
+// map2 returns true if a string is a palindrome.
+func map2(s string) bool {
+
+	left := 0
+	right := len(s) - 1
+
+	for left < right {
+
+		if s[left] != s[right] {
+			return false
+		}
+
+		left++
+		right--
+	}
+	return true
+}
+
+func map3(s string) bool {
+
+	for index, char := range s {
+
+		var nextChar uint8
+
+		if index == len(s)-1 {
+			nextChar = 'a'
+		} else {
+			nextChar = s[index+1]
+		}
+
+		if IsVowel(char) && nextChar != 'p' {
+			return false
+		}
+
+	}
+	return true
 }

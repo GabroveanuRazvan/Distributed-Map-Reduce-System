@@ -1,6 +1,9 @@
 package Utils
 
-import "net"
+import (
+	"net"
+	"strings"
+)
 
 // BoolToInt converts a bool to an integer.
 func BoolToInt(predicate bool) int {
@@ -9,6 +12,11 @@ func BoolToInt(predicate bool) int {
 	}
 
 	return 0
+}
+
+func IsVowel(c rune) bool {
+	vowels := "aeiouAEIOU"
+	return strings.ContainsRune(vowels, c)
 }
 
 // Sum sums up the int values of a vector.
