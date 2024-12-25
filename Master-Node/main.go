@@ -1,6 +1,9 @@
 package main
 
-import "Distributed-Map-Reduce-System/Utils"
+import (
+	"Distributed-Map-Reduce-System/Utils"
+	"fmt"
+)
 
 func main() {
 
@@ -10,10 +13,10 @@ func main() {
 
 	input := [][]string{
 		{"aabbb", "ebep", "blablablaa", "hijk", "wsww"},
-		{"abba", "eeeppp", "cocor", "ppppppaa", "qwerty", "acasq"},
-		{"lalala", "lalal", "papapa", "papap"}}
+		{"abba", "eeeppp", "cocor", "ppppppaa", "qwerty"},
+		{"lalala", "lalal", "papapa", "aabbb", "acasq"}}
 
-	masterNode.RegisterProblem(input, Utils.TypeMap1)
+	fmt.Println(masterNode.RegisterProblem(input, Utils.TypeMap1))
 
 	select {}
 }

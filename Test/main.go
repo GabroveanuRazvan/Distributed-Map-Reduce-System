@@ -1,11 +1,14 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func main() {
 
-	m := make(map[int]int)
+	m := make(map[int]map[string][]int)
 
-	fmt.Println(m[2])
+	c, exists := m[1]
+	fmt.Println(c, exists)
 
 }

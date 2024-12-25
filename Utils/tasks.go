@@ -181,8 +181,8 @@ type TaskResult struct {
 }
 
 // NewTaskResult initializes a new TaskResult.
-func NewTaskResult(processedString string, result int, taskId TaskId, ppi int) TaskResult {
-	return TaskResult{processedString, result, taskId, ppi}
+func NewTaskResult(processedString string, result int, taskId TaskId, ppid int) TaskResult {
+	return TaskResult{processedString, result, taskId, ppid}
 }
 
 // Serialize serializes the current TaskResult and returns its bytes buffer.
