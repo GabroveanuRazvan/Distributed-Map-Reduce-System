@@ -97,8 +97,8 @@ func (connectionPool *ConnectionPool) listenThread() {
 
 }
 
-// NumConnections returns the number of remaining connections.
-func (connectionPool *ConnectionPool) NumConnections() int {
+// numConnections returns the number of remaining connections.
+func (connectionPool *ConnectionPool) numConnections() int {
 
 	connectionPool.connectionsMutex.RLock()
 	defer connectionPool.connectionsMutex.RUnlock()
@@ -110,7 +110,7 @@ func (connectionPool *ConnectionPool) NumConnections() int {
 func (connectionPool *ConnectionPool) incrementRoundRobinIndex() {
 
 	for {
-		numConnections := int64(connectionPool.NumConnections())
+		numConnections := int64(connectionPool.numConnections())
 		currentIndex := atomic.LoadInt64(&connectionPool.roundRobinIndex)
 
 		newIndex := (currentIndex + 1) % numConnections
@@ -225,7 +225,7 @@ func (connectionPool *ConnectionPool) receiveResultsThread(resultTx chan<- TaskR
 				// Unlock the current lock so that there will be no 2 Read locks
 				connectionPool.connectionsMutex.RUnlock()
 				// Update the receive index
-				receiveIndex = (receiveIndex + 1) % connectionPool.NumConnections()
+				receiveIndex = (receiveIndex + 1) % connectionPool.numConnections()
 
 				continue
 			} else {
@@ -345,7 +345,7 @@ func (connectionPool *ConnectionPool) sendReduceTasks(ppid int64, mapResults map
 func (connectionPool *ConnectionPool) haltThread() {
 	// Halt the thread if there are no connections
 	connectionPool.haltingMutex.Lock()
-	if connectionPool.NumConnections() == 0 {
+	if connectionPool.numConnections() == 0 {
 		connectionPool.haltingCond.Wait()
 	}
 	connectionPool.haltingMutex.Unlock()

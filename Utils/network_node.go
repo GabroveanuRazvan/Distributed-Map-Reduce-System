@@ -3,7 +3,12 @@ package Utils
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
+	"os"
+	"os/exec"
+	"strconv"
+	"sync"
 )
 
 type NetworkNode struct {
@@ -11,7 +16,7 @@ type NetworkNode struct {
 	peerAddress string
 }
 
-// NewNetworkNode initializes a new unconnected network node
+// NewNetworkNode initializes a new unconnected network node.
 func NewNetworkNode(peerAddress string) NetworkNode {
 	return NetworkNode{
 		connection:  nil,
@@ -73,4 +78,41 @@ func (node *NetworkNode) ReceiveTask() Task {
 	Panic(err)
 
 	return task
+}
+
+// CreateNodeCluster creates a cluster of nodes by running the executable of each node in a new process.
+func CreateNodeCluster(numNodes uint32, peerAddress string, numThreadsPerNode uint32, executablePath string) {
+
+	// Check if the executable exists
+	_, err := os.Stat(executablePath)
+
+	if err != nil {
+		fmt.Println("Executable file does not exist")
+		os.Exit(1)
+	}
+
+	var wg sync.WaitGroup
+
+	// Create a new process for each node
+	for i := 0; i < int(numNodes); i++ {
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+			numThreads := strconv.Itoa(int(numThreadsPerNode))
+
+			cmd := exec.Command(executablePath, peerAddress, numThreads)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+
+			err := cmd.Run()
+			if err != nil {
+				fmt.Println(err)
+			}
+
+		}()
+
+	}
+
 }
