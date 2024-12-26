@@ -68,3 +68,22 @@ func IsValidMatrix[T any](matrix [][]T) bool {
 
 	return true
 }
+
+func IsFibo(n int) bool {
+
+	if n == 1 {
+		return true
+	}
+
+	f1 := 1
+	f2 := 1
+	f3 := f1 + f2
+
+	for f3 < n {
+		f1 = f2
+		f2 = f3
+		f3 = f1 + f2
+	}
+
+	return f3 == n
+}
