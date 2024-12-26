@@ -183,7 +183,7 @@ func map7(s string) bool {
 		}
 
 	}
-	println(diacriticsCount)
+
 	return diacriticsCount >= 2
 
 }

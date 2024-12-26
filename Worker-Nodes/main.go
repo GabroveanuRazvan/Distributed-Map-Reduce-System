@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 func main() {
@@ -23,7 +24,10 @@ func main() {
 	}
 
 	workerNode := Utils.NewNetworkNode(peerAddress)
-	workerNode.Start(uint32(numThreads))
+	workerNode.Start(uint32(numThreads), false)
 
+	time.Sleep(5 * time.Second)
+
+	workerNode.CloseNode()
 	os.Exit(0)
 }

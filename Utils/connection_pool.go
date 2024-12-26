@@ -65,6 +65,7 @@ func (connectionPool *ConnectionPool) Start() {
 }
 
 // addConnection locks the connection vector in order to append to it a new connection.
+// Uses a Write lock on the connections.
 func (connectionPool *ConnectionPool) addConnection(newConnection net.Conn) {
 
 	connectionPool.connectionsMutex.Lock()
@@ -98,6 +99,7 @@ func (connectionPool *ConnectionPool) listenThread() {
 }
 
 // numConnections returns the number of remaining connections.
+// Uses a Read lock on the connections.
 func (connectionPool *ConnectionPool) numConnections() int {
 
 	connectionPool.connectionsMutex.RLock()
@@ -107,11 +109,14 @@ func (connectionPool *ConnectionPool) numConnections() int {
 }
 
 // incrementRoundRobinIndex increments the index in a round-robin manner.
+// Uses a Read lock on the connections.
 func (connectionPool *ConnectionPool) incrementRoundRobinIndex() {
 
+	// Compare and swap in a loop needed in case there is another thread that has already updated the indes, while
+	// the current thread was in the middle of updating it
 	for {
 		numConnections := int64(connectionPool.numConnections())
-		currentIndex := atomic.LoadInt64(&connectionPool.roundRobinIndex)
+		currentIndex := atomic.LoadInt64(&connectionPool.roundRobinIndex) % numConnections
 
 		newIndex := (currentIndex + 1) % numConnections
 
@@ -120,6 +125,36 @@ func (connectionPool *ConnectionPool) incrementRoundRobinIndex() {
 		}
 	}
 
+}
+
+// removeConnection removes a connection from connections and updates roundRobinIndex.
+// Uses a Write lock on the connections.
+func (connectionPool *ConnectionPool) removeConnection(connectionIndex int) {
+
+	// Get the new number of connections first so that there will be no 2 locks on connections
+	numConnections := int64(connectionPool.numConnections()) - 1
+
+	// Lock the connections mutex for writing
+	connectionPool.connectionsMutex.Lock()
+	defer connectionPool.connectionsMutex.Unlock()
+	// Remove the indexed connection from the array
+	connectionPool.connections = append(connectionPool.connections[:connectionIndex], connectionPool.connections[connectionIndex+1:]...)
+
+	// Check the number of connections to avoid division by 0
+	if numConnections == 0 {
+		return
+	}
+
+	// Make sure that the round-robin index remains valid after this removal
+	for {
+		currentIndex := atomic.LoadInt64(&connectionPool.roundRobinIndex)
+		newIndex := currentIndex % numConnections
+
+		if atomic.CompareAndSwapInt64(&connectionPool.roundRobinIndex, currentIndex, newIndex) {
+			break
+		}
+
+	}
 }
 
 // RegisterProblem takes a matrix of strings and a type of mapping and sends tasks to the system in order to be solved.
@@ -167,6 +202,7 @@ func (connectionPool *ConnectionPool) RegisterProblem(words [][]string, mapId Ma
 
 // sendTask sends a task through a connection in a round-robin manner.
 // Halts if there are no available connections to send the task.
+// Uses Read locks on the connections.
 func (connectionPool *ConnectionPool) sendTask(task Task) {
 
 	// Build the message buffer by creating a buffer formed from the bytes of the encoding length and the encoding itself
@@ -204,6 +240,7 @@ func (connectionPool *ConnectionPool) receiveResultsThread(resultTx chan<- TaskR
 		receiveIndex := 0
 
 		for {
+
 			// Halt if there are no connections
 			connectionPool.haltThread()
 
@@ -228,8 +265,23 @@ func (connectionPool *ConnectionPool) receiveResultsThread(resultTx chan<- TaskR
 				receiveIndex = (receiveIndex + 1) % connectionPool.numConnections()
 
 				continue
-			} else {
-				Panic(err)
+
+				// If there is an error assume to end the connection
+			} else if err != nil {
+
+				// First unlock the mutex so that the connection can be removed
+				connectionPool.connectionsMutex.RUnlock()
+				connectionPool.removeConnection(receiveIndex)
+
+				// Check the number of connections to avoid division by 0
+				numConnections := int64(connectionPool.numConnections())
+				if numConnections == 0 {
+					receiveIndex = 0
+				} else {
+					receiveIndex = (receiveIndex + 1) % connectionPool.numConnections()
+				}
+
+				continue
 			}
 
 			encodingLength := binary.BigEndian.Uint32(encodingLengthBytes)
@@ -329,6 +381,7 @@ func (connectionPool *ConnectionPool) resultProcessorThread(resultRx <-chan Task
 
 // sendReduceTasks takes a bunch of strings and their map values and wraps them into ReduceTask to be sent back to the cluster of worker nodes.
 // Return the number of reduce tasks sent.
+// Uses Read locks on the connections.
 func (connectionPool *ConnectionPool) sendReduceTasks(ppid int64, mapResults map[string][]int, reduceId ReduceFunctionId) int {
 
 	numTasks := 0

@@ -11,10 +11,11 @@ type ThreadPool struct {
 	workers   []Worker
 	waitGroup *sync.WaitGroup
 	jobSender chan<- Job
+	verbose   bool
 }
 
 // NewThreadPool initializes a new thread pool with a fixed number of workers.
-func NewThreadPool(numWorkers uint32) *ThreadPool {
+func NewThreadPool(numWorkers uint32, verbose bool) *ThreadPool {
 
 	// panic in case when there are no workers
 	if numWorkers == 0 {
@@ -29,7 +30,7 @@ func NewThreadPool(numWorkers uint32) *ThreadPool {
 	// create and start the workers
 	for i := uint32(0); i < numWorkers; i++ {
 
-		workers[i] = NewWorker(i+1, waitGroup)
+		workers[i] = NewWorker(i+1, waitGroup, verbose)
 		workers[i].Start(jobSender)
 
 	}
@@ -39,6 +40,7 @@ func NewThreadPool(numWorkers uint32) *ThreadPool {
 		workers:   workers,
 		waitGroup: waitGroup,
 		jobSender: jobSender,
+		verbose:   verbose,
 	}
 }
 
@@ -60,22 +62,27 @@ func (threadPool *ThreadPool) Wait() {
 }
 
 type Worker struct {
-	id uint32
-	wg *sync.WaitGroup
+	id      uint32
+	wg      *sync.WaitGroup
+	verbose bool
 }
 
 // NewWorker returns a new worker with a wait group reference.
-func NewWorker(id uint32, group *sync.WaitGroup) Worker {
+func NewWorker(id uint32, group *sync.WaitGroup, verbose bool) Worker {
 	return Worker{
-		id: id,
-		wg: group,
+		id:      id,
+		wg:      group,
+		verbose: verbose,
 	}
 }
 
 // Start  starts the worker by incrementing the wait group and waiting to receive jobs through the channel.
 func (worker Worker) Start(jobReceiver <-chan Job) {
 
-	fmt.Printf("Worker %d started and is waiting for jobs...\n", worker.id)
+	if worker.verbose {
+		fmt.Printf("Worker %d started and is waiting for jobs...\n", worker.id)
+	}
+
 	worker.wg.Add(1)
 
 	// Start the thread and wait for jobs while the channel is opened
@@ -85,14 +92,22 @@ func (worker Worker) Start(jobReceiver <-chan Job) {
 
 		for job := range jobReceiver {
 			// once a job is received, process and run it
-			fmt.Printf("Worker %d got a new job!\n", worker.id)
+
+			if worker.verbose {
+				fmt.Printf("Worker %d got a new job!\n", worker.id)
+			}
 
 			job()
 
-			fmt.Printf("Worker %d finished its job.\n", worker.id)
+			if worker.verbose {
+				fmt.Printf("Worker %d finished its job.\n", worker.id)
+			}
+
 		}
 
-		fmt.Printf("Worker %d closed.\n", worker.id)
+		if worker.verbose {
+			fmt.Printf("Worker %d closed.\n", worker.id)
+		}
 
 	}()
 
