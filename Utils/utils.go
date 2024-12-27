@@ -49,8 +49,8 @@ func Panic(err error) {
 	}
 }
 
-// ReadTimeoutError checks if an error is a timeout one and checks if it really did time out.
-func ReadTimeoutError(err error) bool {
+// TimeoutError checks if an error is a timeout one and checks if it really did time out.
+func TimeoutError(err error) bool {
 	netErr, ok := err.(net.Error)
 	return ok && netErr.Timeout()
 }

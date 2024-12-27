@@ -117,9 +117,10 @@ func (node *NetworkNode) ReceiveTask() Task {
 	_, err = node.connection.Read(encodingLengthBytes)
 
 	// Return nil if a timeout occurred
-	if ReadTimeoutError(err) {
+	if TimeoutError(err) {
 		return nil
 	} else {
+		node.CloseNode()
 		Panic(err)
 	}
 

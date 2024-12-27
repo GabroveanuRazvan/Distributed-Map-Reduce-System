@@ -257,7 +257,7 @@ func (connectionPool *ConnectionPool) receiveResultsThread(resultTx chan<- TaskR
 			_, err = currentConn.Read(encodingLengthBytes)
 
 			// If the read timed out just continue to the next connection
-			if ReadTimeoutError(err) {
+			if TimeoutError(err) {
 
 				// Unlock the current lock so that there will be no 2 Read locks
 				connectionPool.connectionsMutex.RUnlock()

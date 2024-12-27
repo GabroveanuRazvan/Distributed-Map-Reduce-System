@@ -3,6 +3,7 @@ package main
 import (
 	"Distributed-Map-Reduce-System/Utils"
 	"fmt"
+	"time"
 )
 
 func main() {
@@ -119,7 +120,7 @@ func main() {
 	}
 
 	// Run the node cluster
-	Utils.CreateNodeCluster(4, "127.0.0.1:7878", 2, "../Worker-Nodes/worker-node")
+	Utils.CreateNodeCluster(4, "127.0.0.1:7878", 2, "../Worker-Node/worker-node")
 
-	select {}
+	time.Sleep(10 * time.Second)
 }
